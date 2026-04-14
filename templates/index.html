@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monarch — AI Gender Classifier</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #080808;
+      --surface:   #0f0f0f;
+      --surface2:  #141414;
+      --border:    #1c1c1c;
+      --border2:   #252525;
+      --text:      #f0f0f0;
+      --muted:     #4a4a4a;
+      --muted2:    #333;
+      --blue:      #3b82f6;
+      --blue-glow: rgba(59,130,246,0.18);
+      --pink:      #ec4899;
+      --pink-glow: rgba(236,72,153,0.18);
+      --amber:     #f59e0b;
+      --amber-glow:rgba(245,158,11,0.18);
+      --radius:    18px;
+      --radius-sm: 10px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px 48px;
+      overflow-x: hidden;
+    }
+
+    /* ── Ambient background orbs ─────────────────────────────────────────── */
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(120px);
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0;
+      animation: orbFade 1.4s ease forwards;
+    }
+    .orb-1 { width: 500px; height: 500px; top: -180px; left: -120px; background: rgba(59,130,246,0.07); animation-delay: 0.2s; }
+    .orb-2 { width: 400px; height: 400px; bottom: -150px; right: -100px; background: rgba(236,72,153,0.07); animation-delay: 0.5s; }
+    @keyframes orbFade { to { opacity: 1; } }
+
+    /* ── Layout wrapper ──────────────────────────────────────────────────── */
+    .wrapper {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 520px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    /* ── Header ──────────────────────────────────────────────────────────── */
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+      animation: slideDown 0.6s cubic-bezier(.22,1,.36,1) both;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .logo-ring {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 72px;
+      height: 72px;
+      border-radius: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      margin-bottom: 18px;
+      position: relative;
+      box-shadow: 0 0 0 1px var(--border), 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    .logo-ring::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: 21px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.06), transparent 60%);
+      pointer-events: none;
+    }
+
+    .logo-ring img { width: 42px; height: 42px; object-fit: contain; }
+
+    .header h1 {
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      background: linear-gradient(135deg, #fff 30%, #888);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header .tagline {
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 400;
+      letter-spacing: 0.2px;
+    }
+
+    /* ── Main card ───────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset,
+                  0 24px 64px rgba(0,0,0,0.5);
+      animation: slideUp 0.6s cubic-bezier(.22,1,.36,1) 0.1s both;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Upload zone ─────────────────────────────────────────────────────── */
+    .upload-zone {
+      position: relative;
+      border: 1.5px dashed var(--border2);
+      border-radius: 14px;
+      padding: 40px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: var(--surface2);
+      overflow: hidden;
+    }
+
+    .upload-zone::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.02), transparent 70%);
+      pointer-events: none;
+    }
+
+    .upload-zone:hover,
+    .upload-zone.drag-over {
+      border-color: var(--muted);
+      background: #161616;
+    }
+
+    .upload-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .upload-icon-wrap {
+      width: 52px;
+      height: 52px;
+      margin: 0 auto 16px;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    .upload-icon-wrap svg { width: 22px; height: 22px; stroke: #555; }
+
+    .upload-zone h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #bbb;
+      margin-bottom: 5px;
+    }
+
+    .upload-zone p {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .upload-zone .badge {
+      display: inline-flex;
+      gap: 6px;
+      margin-top: 14px;
+    }
+
+    .upload-zone .badge span {
+      font-size: 10px;
+      font-weight: 500;
+      padding: 3px 8px;
+      border-radius: 99px;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      color: var(--muted);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    /* ── Preview ─────────────────────────────────────────────────────────── */
+    #preview-wrap {
+      display: none;
+      margin-top: 0;
+      border-radius: 14px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid var(--border2);
+      background: #000;
+    }
+
+    #preview {
+      width: 100%;
+      max-height: 260px;
+      object-fit: cover;
+      display: block;
+      transition: opacity 0.3s;
+    }
+
+    .preview-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    .change-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #ccc;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s;
+      letter-spacing: 0.3px;
+    }
+
+    .change-btn:hover { background: rgba(0,0,0,0.85); color: #fff; border-color: rgba(255,255,255,0.2); }
+
+    /* ── Divider ─────────────────────────────────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 22px 0;
+    }
+
+    /* ── Analyse button ──────────────────────────────────────────────────── */
+    .predict-btn {
+      width: 100%;
+      padding: 15px;
+      background: #fff;
+      color: #000;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      letter-spacing: 0.3px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .predict-btn::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+      pointer-events: none;
+    }
+
+    .predict-btn:hover:not(:disabled) {
+      background: #e8e8e8;
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(255,255,255,0.1);
+    }
+
+    .predict-btn:active:not(:disabled) { transform: translateY(0); }
+
+    .predict-btn:disabled {
+      background: var(--surface2);
+      color: var(--muted2);
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .predict-btn:disabled::after { display: none; }
+
+    .predict-btn.loading {
+      background: var(--surface2);
+      color: var(--muted);
+      cursor: not-allowed;
+    }
+
+    /* ── Spinner ─────────────────────────────────────────────────────────── */
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--border2);
+      border-top-color: #666;
+      border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Result card ─────────────────────────────────────────────────────── */
+    .result {
+      display: none;
+      margin-top: 20px;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      animation: fadeUp 0.4s cubic-bezier(.22,1,.36,1);
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Coloured top strip */
+    .result-strip {
+      height: 3px;
+      width: 100%;
+      transition: background 0.4s;
+    }
+
+    .result.male   .result-strip { background: linear-gradient(90deg, var(--blue), #818cf8); }
+    .result.female .result-strip { background: linear-gradient(90deg, var(--pink), #f97316); }
+    .result.uncertain .result-strip { background: linear-gradient(90deg, var(--amber), #84cc16); }
+
+    .result-body {
+      padding: 20px 22px 22px;
+      background: var(--surface2);
+    }
+
+    /* Top row: icon + label */
+    .result-top {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .result-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+      transition: background 0.4s, box-shadow 0.4s;
+    }
+
+    .result.male   .result-icon { background: var(--blue-glow);  box-shadow: 0 0 0 1px rgba(59,130,246,0.25); }
+    .result.female .result-icon { background: var(--pink-glow);  box-shadow: 0 0 0 1px rgba(236,72,153,0.25); }
+    .result.uncertain .result-icon { background: var(--amber-glow); box-shadow: 0 0 0 1px rgba(245,158,11,0.25); }
+
+    .result-meta { flex: 1; }
+
+    .result-eyebrow {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--muted);
+      margin-bottom: 3px;
+    }
+
+    .result-prediction {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.6px;
+      line-height: 1;
+      transition: color 0.4s;
+    }
+
+    .result.male      .result-prediction { color: var(--blue); }
+    .result.female    .result-prediction { color: var(--pink); }
+    .result.uncertain .result-prediction { color: var(--amber); }
+
+    .result-confidence {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* Probability bars */
+    .prob-section { display: flex; flex-direction: column; gap: 10px; }
+
+    .prob-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .prob-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #666;
+      width: 54px;
+      flex-shrink: 0;
+    }
+
+    .prob-track {
+      flex: 1;
+      height: 5px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .prob-fill {
+      height: 100%;
+      border-radius: 99px;
+      width: 0%;
+      transition: width 0.8s cubic-bezier(.22,1,.36,1);
+    }
+
+    .prob-fill.male   { background: linear-gradient(90deg, var(--blue), #818cf8); }
+    .prob-fill.female { background: linear-gradient(90deg, var(--pink), #f97316); }
+
+    .prob-value {
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+      width: 46px;
+      text-align: right;
+      flex-shrink: 0;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Error ───────────────────────────────────────────────────────────── */
+    .error-msg {
+      display: none;
+      margin-top: 16px;
+      padding: 13px 16px;
+      background: rgba(239,68,68,0.07);
+      border: 1px solid rgba(239,68,68,0.18);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: #f87171;
+      display: none;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .error-msg svg { width: 16px; height: 16px; stroke: #f87171; flex-shrink: 0; }
+
+    /* ── Footer ──────────────────────────────────────────────────────────── */
+    .footer {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 11px;
+      color: #222;
+      animation: slideUp 0.6s cubic-bezier(.22,1,.36,1) 0.3s both;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .footer-dot {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: #2a2a2a;
+    }
+
+    /* ── Responsive ──────────────────────────────────────────────────────── */
+    @media (max-width: 480px) {
+      .card { padding: 20px; }
+      .header h1 { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Ambient orbs -->
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+
+  <div class="wrapper">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="logo-ring">
+        <img src="/logo" alt="Monarch logo" />
+      </div>
+      <h1>Monarch</h1>
+      <p class="tagline">Deep-learning gender classification · CNN model</p>
+    </div>
+
+    <!-- Card -->
+    <div class="card">
+
+      <!-- Upload zone -->
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept="image/*" />
+        <div class="upload-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <h3>Drop an image here</h3>
+        <p>or click to browse your files</p>
+        <div class="badge">
+          <span>JPG</span><span>PNG</span><span>WEBP</span>
+        </div>
+      </div>
+
+      <!-- Preview -->
+      <div id="preview-wrap">
+        <img id="preview" alt="Uploaded image preview" />
+        <div class="preview-overlay"></div>
+        <button class="change-btn" onclick="resetUpload()">✕ Change</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Analyse button -->
+      <button class="predict-btn" id="predictBtn" onclick="predict()" disabled>
+        Analyse Image
+      </button>
+
+      <!-- Result -->
+      <div class="result" id="result">
+        <div class="result-strip"></div>
+        <div class="result-body">
+          <div class="result-top">
+            <div class="result-icon" id="resultIcon"></div>
+            <div class="result-meta">
+              <div class="result-eyebrow">Prediction</div>
+              <div class="result-prediction" id="predictionText"></div>
+              <div class="result-confidence" id="confidenceText"></div>
+            </div>
+          </div>
+          <div class="prob-section">
+            <div class="prob-row">
+              <span class="prob-label">Male</span>
+              <div class="prob-track"><div class="prob-fill male" id="maleBar"></div></div>
+              <span class="prob-value" id="maleVal"></span>
+            </div>
+            <div class="prob-row">
+              <span class="prob-label">Female</span>
+              <div class="prob-track"><div class="prob-fill female" id="femaleBar"></div></div>
+              <span class="prob-value" id="femaleVal"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error -->
+      <div class="error-msg" id="errorMsg">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span id="errorText"></span>
+      </div>
+
+    </div><!-- /card -->
+
+    <!-- Footer -->
+    <div class="footer">
+      <span>Monarch</span>
+      <div class="footer-dot"></div>
+      <span>CNN · TensorFlow</span>
+      <div class="footer-dot"></div>
+      <span>ML Assignment</span>
+    </div>
+
+  </div><!-- /wrapper -->
+
+<script>
+  const fileInput   = document.getElementById('fileInput');
+  const uploadZone  = document.getElementById('uploadZone');
+  const previewWrap = document.getElementById('preview-wrap');
+  const preview     = document.getElementById('preview');
+  const predictBtn  = document.getElementById('predictBtn');
+
+  // ── File input ──────────────────────────────────────────────────────────
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) loadPreview(fileInput.files[0]);
+  });
+
+  // ── Drag & drop ─────────────────────────────────────────────────────────
+  uploadZone.addEventListener('dragover',  e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+  uploadZone.addEventListener('dragleave', ()  => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fileInput.files = dt.files;
+      loadPreview(file);
+    }
+  });
+
+  function loadPreview(file) {
+    preview.src = URL.createObjectURL(file);
+    previewWrap.style.display = 'block';
+    uploadZone.style.display  = 'none';
+    predictBtn.disabled = false;
+    hide('result');
+    hideError();
+  }
+
+  function resetUpload() {
+    fileInput.value = '';
+    previewWrap.style.display = 'none';
+    uploadZone.style.display  = 'block';
+    predictBtn.disabled = true;
+    hide('result');
+    hideError();
+  }
+
+  // ── Predict ─────────────────────────────────────────────────────────────
+  async function predict() {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    predictBtn.disabled = true;
+    predictBtn.classList.add('loading');
+    predictBtn.innerHTML = '<span class="spinner"></span>Analysing…';
+    hide('result');
+    hideError();
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res  = await fetch('/predict', { method: 'POST', body: formData });
+      const data = await res.json();
+      data.error ? showError(data.error) : showResult(data);
+    } catch {
+      showError('Network error — please try again.');
+    }
+
+    predictBtn.disabled = false;
+    predictBtn.classList.remove('loading');
+    predictBtn.innerHTML = 'Analyse Image';
+  }
+
+  // ── Show result ──────────────────────────────────────────────────────────
+  const ICONS = { Male: '♂', Female: '♀', Uncertain: '?' };
+  const CONF_LABELS = {
+    Male:      'Classified as male with high confidence',
+    Female:    'Classified as female with high confidence',
+    Uncertain: 'Confidence below threshold — result uncertain',
+  };
+
+  function showResult(data) {
+    const maleRaw   = parseFloat(data.male_raw);
+    const femaleRaw = parseFloat(data.female_raw);
+    const pred      = data.prediction;
+
+    const resultDiv = document.getElementById('result');
+    resultDiv.className = 'result ' + pred.toLowerCase();
+    resultDiv.style.display = 'block';
+
+    document.getElementById('resultIcon').textContent     = ICONS[pred] ?? '?';
+    document.getElementById('predictionText').textContent = pred;
+    document.getElementById('confidenceText').textContent = CONF_LABELS[pred] ?? '';
+    document.getElementById('maleVal').textContent        = data.male_probability;
+    document.getElementById('femaleVal').textContent      = data.female_probability;
+
+    // Animate bars on next frame
+    requestAnimationFrame(() => {
+      document.getElementById('maleBar').style.width   = maleRaw   + '%';
+      document.getElementById('femaleBar').style.width = femaleRaw + '%';
+    });
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  function hide(id)  { document.getElementById(id).style.display = 'none'; }
+
+  function showError(msg) {
+    const el = document.getElementById('errorMsg');
+    document.getElementById('errorText').textContent = msg;
+    el.style.display = 'flex';
+  }
+
+  function hideError() {
+    document.getElementById('errorMsg').style.display = 'none';
+  }
+</script>
+</body>
+</html>

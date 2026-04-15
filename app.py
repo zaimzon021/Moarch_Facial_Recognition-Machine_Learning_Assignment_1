@@ -43,7 +43,7 @@ def home():
 
 @app.route("/logo")
 def logo():
-    return send_from_directory("Data", "Monarch.png")
+    return send_from_directory(".", "logo.png")
 
 @app.route("/predict", methods=["POST"])
 def predict():
